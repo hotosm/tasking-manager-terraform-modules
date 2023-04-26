@@ -53,6 +53,11 @@ resource "aws_db_parameter_group" "baseline" {
   description = "AWS RDS PostgreSQL parameter set"
 }
 
+resource "random_password" "database" {
+  length  = lookup(var.database, "password_length")
+  special = false
+}
+
 resource "aws_db_instance" "database" {
   identifier = join("-", [var.project_name, var.deployment_environment])
 
@@ -92,5 +97,5 @@ resource "aws_db_instance" "database" {
   // Database options
   db_name  = lookup(var.database, "name")
   username = lookup(var.database, "admin_user")
-  password = lookup(var.database, "admin_password")
+  password = random_password.database.result
 }

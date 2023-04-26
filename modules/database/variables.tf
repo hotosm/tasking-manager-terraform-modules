@@ -50,15 +50,16 @@ variable "subnet_ids" {
   type = list(string)
 }
 
+// NOTE: Password is generated automatically and stored in AWS Secrets Manager
 variable "database" {
-  description = "PostgreSQL parameters"
+  description = "PostgreSQL connection parameters and version."
   type        = map(string)
 
   default = {
-    name           = "taskingmanager"
-    admin_user     = "hotdba"
-    admin_password = "MyGreatSecret"
-    engine_version = 13
+    name            = "taskingmanager"
+    admin_user      = "hotdba"
+    password_length = 48
+    engine_version  = 13
   }
 }
 
