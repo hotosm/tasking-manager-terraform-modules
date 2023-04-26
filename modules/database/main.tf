@@ -45,6 +45,30 @@ resource "aws_security_group" "database" {
   name_prefix = join("-", [var.project_name, var.deployment_environment])
   vpc_id      = var.vpc_id
 
+  ingress {
+    description = "Allow from self"
+    from_port   = lookup(var.database, "port")
+    to_port     = lookup(var.database, "port")
+    protocol    = "tcp"
+    self        = true
+  }
+
+  ingress {
+    description     = "Allow from self"
+    from_port       = lookup(var.database, "port")
+    to_port         = lookup(var.database, "port")
+    protocol        = "tcp"
+    security_groups = []
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
 }
 
 resource "aws_db_parameter_group" "baseline" {
@@ -98,4 +122,44 @@ resource "aws_db_instance" "database" {
   db_name  = lookup(var.database, "name")
   username = lookup(var.database, "admin_user")
   password = random_password.database.result
+  port     = lookup(var.database, "port")
+}
+
+resource "aws_secretsmanager_secret" "db-credentials" {
+  name_prefix = join("/", [
+    "/",
+    join(".", [
+      lookup(var.domain_tld, "domain"),
+      lookup(var.domain_tld, "tld")
+    ]),
+    var.project_name,
+    var.deployment_environment,
+    "database"
+  ])
+}
+
+resource "aws_secretsmanager_secret_version" "db-credentials" {
+  secret_id = aws_secretsmanager_secret.db-credentials.id
+  secret_string = jsonencode(
+    zipmap(
+      [
+        "dbinstanceidentifier",
+        "dbname",
+        "engine",
+        "host",
+        "port",
+        "username",
+        "password"
+      ],
+      [
+        aws_db_instance.database.id,
+        aws_db_instance.database.db_name,
+        aws_db_instance.database.engine,
+        aws_db_instance.database.address,
+        aws_db_instance.database.port,
+        aws_db_instance.database.username,
+        random_password.database.result
+      ]
+    )
+  )
 }

@@ -60,6 +60,7 @@ variable "database" {
     admin_user      = "hotdba"
     password_length = 48
     engine_version  = 13
+    port            = 5432
   }
 }
 
