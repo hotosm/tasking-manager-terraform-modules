@@ -36,3 +36,12 @@ variable "aws_region" {
 
   description = "AWS in which to host the project"
 }
+
+variable "backup" {
+  type = map(string)
+
+  default = {
+    final_snapshot_identifier = "hello"
+  }
+}
+
