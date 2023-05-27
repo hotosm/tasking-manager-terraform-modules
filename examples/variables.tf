@@ -7,9 +7,26 @@ variable "project_name" {
 
 variable "deployment_environment" {
   type    = string
-  default = "staging"
+  default = "dev"
 
   description = "Flavour of deployment"
+  validation {
+    condition = contains(
+      [
+        "prod",
+        "production",
+        "stage",
+        "staging",
+        "dev",
+        "development",
+        "test",
+        "testing",
+        "uat"
+      ],
+      var.deployment_environment
+    )
+    error_message = "Deployment_environment must conform to allowed values"
+  }
 }
 
 variable "default_tags" {
@@ -45,3 +62,12 @@ variable "backup" {
   }
 }
 
+variable "rds_opts" {
+  description = "RDS Options"
+
+  type = map(string)
+  default = {
+    instance_class = "db.t4g.small"
+    multi_az       = false
+  }
+}
