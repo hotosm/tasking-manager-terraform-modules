@@ -16,7 +16,6 @@ variable "deployment_environment" {
   description = "Flavour or deployment environment"
 
   type    = string
-  default = "dev"
 
   validation {
     condition = contains(

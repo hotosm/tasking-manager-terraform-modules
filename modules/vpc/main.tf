@@ -47,6 +47,7 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_eip" "nat" {
+  // domain = "vpc"
   vpc = true
 }
 
