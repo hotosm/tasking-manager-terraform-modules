@@ -9,7 +9,6 @@ variable "deployment_environment" {
   description = "Flavour or deployment environment"
 
   type    = string
-  default = "dev"
 
   validation {
     condition = contains(
@@ -39,7 +38,7 @@ variable "rds_opts" {
 
   type = map(string)
   default = {
-    instance_class = "db.t4g.large"
+    instance_class = "db.t4g.medium"
     multi_az       = false
   }
 }

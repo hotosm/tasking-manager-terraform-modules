@@ -40,7 +40,7 @@ resource "aws_db_subnet_group" "database" {
 }
 
 resource "aws_security_group" "database" {
-  description = "Security group to attach to the Database instance"
+  description = "Security group to attach to the Database instance and app services"
 
   name_prefix = join("-", [var.project_name, var.deployment_environment])
   vpc_id      = var.vpc_id
@@ -53,14 +53,6 @@ resource "aws_security_group" "database" {
     self        = true
   }
 
-  ingress {
-    description     = "Allow from self"
-    from_port       = lookup(var.database, "port")
-    to_port         = lookup(var.database, "port")
-    protocol        = "tcp"
-    security_groups = []
-  }
-
   egress {
     from_port        = 0
     to_port          = 0
@@ -68,7 +60,6 @@ resource "aws_security_group" "database" {
     cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
   }
-
 }
 
 resource "aws_db_parameter_group" "baseline" {
@@ -96,7 +87,7 @@ resource "aws_db_instance" "database" {
 
   // Data backup options
   backup_retention_period   = lookup(var.backup, "retention_days")
-  final_snapshot_identifier = lookup(var.backup, "final_snapshot_identifier")
+  final_snapshot_identifier = join("-", [lookup(var.backup, "final_snapshot_identifier"), formatdate("YYYY-MM-DD-hh-mm", timestamp())])
   copy_tags_to_snapshot     = true
   delete_automated_backups  = false
 
@@ -126,8 +117,9 @@ resource "aws_db_instance" "database" {
 }
 
 resource "aws_secretsmanager_secret" "db-credentials" {
+  description = "Database connection parameters and access credentials"
+
   name_prefix = join("/", [
-    "/",
     join(".", [
       lookup(var.domain_tld, "domain"),
       lookup(var.domain_tld, "tld")
