@@ -71,7 +71,7 @@ data "aws_secretsmanager_secret" "oauth2_app_connect" {
 }
 
 resource "aws_iam_role" "ecs-execution" {
-  name_prefix        = join("-", [var.project_name, var.deployment_environment, "backend-task"])
+  name_prefix = join("-", [var.project_name, var.deployment_environment, "backend-task"])
   path        = join("", ["/", "tasking-manager", "/", var.deployment_environment, "/"])
 
   assume_role_policy = data.aws_iam_policy_document.tasks-sts.json
@@ -88,7 +88,7 @@ resource "aws_iam_role" "ecs-execution" {
 }
 
 resource "aws_iam_role" "ecs-task" {
-  name_prefix        = join("-", [var.project_name, var.deployment_environment, "backend-exec"])
+  name_prefix = join("-", [var.project_name, var.deployment_environment, "backend-exec"])
   path        = join("", ["/", "tasking-manager", "/", var.deployment_environment, "/"])
 
   assume_role_policy = data.aws_iam_policy_document.tasks-sts.json
@@ -305,6 +305,39 @@ resource "aws_cloudwatch_metric_alarm" "mem" {
   insufficient_data_actions = []
 }
 
+resource "aws_security_group" "public-web-access" {
+  description = "Security group to attach to the load balancers"
+
+  name_prefix = join("-", [var.project_name, var.deployment_environment])
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description      = "Allow from security groups"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Allow from security groups"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+}
+
 resource "aws_security_group" "backend-to-loadbalancer" {
   description = "Security group to attach to the backend containers"
 
@@ -395,7 +428,10 @@ resource "aws_lb" "backend" {
   ip_address_type    = "dualstack"
   load_balancer_type = "application"
 
-  security_groups = [aws_security_group.backend-to-loadbalancer.id]
+  security_groups = [
+    aws_security_group.backend-to-loadbalancer.id,
+    aws_security_group.public-web-access.id
+  ]
 
   subnets = lookup(var.subnets, "loadbalancer")
 }
@@ -419,13 +455,6 @@ resource "aws_lb_target_group" "backend" {
     unhealthy_threshold = 3
   }
 }
-
-// resource "aws_lb_target_group_attachment" "backend" {
-//   target_group_arn  = aws_lb_target_group.backend.arn
-//   target_id         = aws_lb.backend.arn
-//   port              = 80
-//   availability_zone = "all"
-// }
 
 resource "aws_lb_listener" "backend-plain" {
   load_balancer_arn = aws_lb.backend.arn
