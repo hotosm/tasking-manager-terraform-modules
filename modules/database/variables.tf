@@ -8,7 +8,7 @@ variable "project_name" {
 variable "deployment_environment" {
   description = "Flavour or deployment environment"
 
-  type    = string
+  type = string
 
   validation {
     condition = contains(

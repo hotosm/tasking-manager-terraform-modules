@@ -1,0 +1,198 @@
+data "aws_iam_policy_document" "tasks-sts" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "secrets-manager-access" {
+  statement {
+    actions = ["secretsmanager:GetSecretValue"]
+
+    resources = [
+      var.secrets_store_db_credential_arn
+    ]
+  }
+}
+
+data "aws_iam_policy_document" "cloudwatch-logs-access" {
+  statement {
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+    ]
+
+    resources = [
+      aws_cloudwatch_log_group.tasking-manager.arn,
+      join(":", [aws_cloudwatch_log_group.tasking-manager.arn, "log-stream", "*"])
+    ]
+  }
+}
+
+resource "aws_iam_role" "ecs-execution" {
+  name_prefix = join("-", [var.project_name, var.deployment_environment, "dba-task"])
+  path        = join("", ["/", "tasking-manager", "/", var.deployment_environment, "/"])
+
+  assume_role_policy = data.aws_iam_policy_document.tasks-sts.json
+
+  inline_policy {
+    name   = "access-secrets-manager"
+    policy = data.aws_iam_policy_document.secrets-manager-access.json
+  }
+
+  inline_policy {
+    name   = "access-cloudwatch-logs"
+    policy = data.aws_iam_policy_document.cloudwatch-logs-access.json
+  }
+}
+
+resource "aws_iam_role" "ecs-task" {
+  name_prefix = join("-", [var.project_name, var.deployment_environment, "dba-exec"])
+  path        = join("", ["/", "tasking-manager", "/", var.deployment_environment, "/"])
+
+  assume_role_policy = data.aws_iam_policy_document.tasks-sts.json
+
+  inline_policy {
+    name   = "access-cloudwatch-logs"
+    policy = data.aws_iam_policy_document.cloudwatch-logs-access.json
+  }
+}
+
+resource "aws_ecs_cluster_capacity_providers" "tasking-manager" {
+  cluster_name = aws_ecs_cluster.tasking-manager.name
+
+  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    base              = 1
+    weight            = 85
+  }
+}
+
+resource "aws_ecs_task_definition" "tasking-manager-db-restore" {
+  family = join("-", [var.project_name, var.deployment_environment])
+
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = lookup(var.container_capacity, "cpu")
+  memory                   = lookup(var.container_capacity, "memory_mb")
+
+  execution_role_arn = aws_iam_role.ecs-execution.arn
+  task_role_arn      = aws_iam_role.ecs-task.arn
+
+  network_mode = "awsvpc"
+
+  ephemeral_storage {
+    size_in_gib = var.ephemeral_storage_gb
+  }
+
+  // TODO: Add volume configuration
+  //  volume {
+  //    docker_volume_configuration {
+  //      scope = "task"
+  //      labels = {
+  //        a = "b"
+  //        c = "d"
+  //      }
+  //    }
+  //
+  //    efs_volume_configuration {
+  //      file_system_id = "aws_efs_filesystem.name.id"
+  //      root_directory = "/foo"
+  //    }
+  //  }
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = var.container_runtime_architecture
+  }
+
+  container_definitions = jsonencode([
+    {
+      name  = "backend"
+      image = join(":", [lookup(var.container_image, "uri"), lookup(var.container_image, "tag")])
+
+      environment = [
+        {
+          name  = "deployment_environment"
+          value = var.deployment_environment
+        }
+      ]
+
+      essential = false
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.tasking-manager.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = join("-", [var.deployment_environment, "backend"])
+        }
+      }
+
+      portMappings = [
+        {
+          name          = "backend"
+          containerPort = var.container_port
+          protocol      = "tcp"
+          appProtocol   = "http" // Or "http2" or "grpc"
+        }
+      ]
+
+      secrets = [
+        {
+          name      = "TM_DB_CONNECT_PARAM_JSON"
+          valueFrom = var.secrets_store_db_credential_arn
+        }
+      ]
+
+      startTimeout = 15
+      stopTimeout  = 15
+
+    }
+  ])
+}
+
+resource "aws_ecs_service" "db-restore" {
+  name    = join("-", [var.project_name, var.deployment_environment])
+  cluster = aws_ecs_cluster.tasking-manager.arn
+
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    base              = 1
+    weight            = 100
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  deployment_controller {
+    type = "ECS"
+  }
+
+  deployment_maximum_percent         = 100
+  deployment_minimum_percent         = 0
+  desired_count                      = 0
+  enable_ecs_managed_tags            = true
+  force_new_deployment               = true
+  health_check_grace_period_seconds  = 10
+
+  network_configuration {
+    subnets = lookup(var.subnets, "service")
+    security_groups = [
+      var.database_security_group
+    ]
+  }
+
+  propagate_tags        = "SERVICE" // OR TASK_DEFINITION
+  scheduling_strategy   = "REPLICA"
+  task_definition       = aws_ecs_task_definition.tasking-manager-db-restore.arn
+  wait_for_steady_state = true
+}

@@ -491,3 +491,30 @@ resource "aws_lb_listener" "backend-secure" {
   }
 }
 
+data "aws_route53_zone" "primary" {
+  name = var.https_certificate_domain_name
+}
+
+resource "aws_route53_record" "api" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = join(".", ["api", lookup(var.base_uri, "uri")])
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.backend.dns_name
+    zone_id                = aws_lb.backend.zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "apiv6" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = join(".", ["api", lookup(var.base_uri, "uri")])
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_lb.backend.dns_name
+    zone_id                = aws_lb.backend.zone_id
+    evaluate_target_health = true
+  }
+}

@@ -73,6 +73,53 @@ resource "random_password" "database" {
   special = false
 }
 
+resource "aws_rds_cluster" "database" {
+  cluster_identifier = join("-", [var.project_name, var.deployment_environment])
+  database_name      = lookup(var.database, "name")
+  master_username    = lookup(var.database, "admin_user")
+  master_password    = random_password.database.result
+
+  engine         = "aurora-postgresql"
+  engine_mode    = "provisioned"
+  engine_version = lookup(var.database, "engine_version")
+
+  serverlessv2_scaling_configuration {
+    max_capacity = 16
+    min_capacity = 0.5
+  }
+
+  copy_tags_to_snapshot = true
+  final_snapshot_identifier = join("-",
+    [
+      lookup(var.backup, "final_snapshot_identifier"),
+      formatdate("YYYY-MM-DD-hh-mm", timestamp())
+    ]
+  )
+
+  backup_retention_period   = lookup(var.backup, "retention_days")
+
+  vpc_security_group_ids = [aws_security_group.database.id]
+  db_subnet_group_name   = aws_db_subnet_group.database.name
+
+  apply_immediately   = true
+  deletion_protection = contains(["prod", "production"], var.deployment_environment) ? true : false
+
+  lifecycle {
+    ignore_changes = [
+      availability_zones,
+    ]
+  }
+}
+
+resource "aws_rds_cluster_instance" "database" {
+  cluster_identifier   = aws_rds_cluster.database.id
+  engine               = aws_rds_cluster.database.engine
+  engine_version       = aws_rds_cluster.database.engine_version
+  instance_class       = "db.serverless"
+  db_subnet_group_name = aws_rds_cluster.database.db_subnet_group_name
+}
+
+/*
 resource "aws_db_instance" "database" {
   identifier = join("-", [var.project_name, var.deployment_environment])
 
@@ -115,6 +162,7 @@ resource "aws_db_instance" "database" {
   password = random_password.database.result
   port     = lookup(var.database, "port")
 }
+*/
 
 resource "aws_secretsmanager_secret" "db-credentials" {
   description = "Database connection parameters and access credentials"
@@ -130,6 +178,7 @@ resource "aws_secretsmanager_secret" "db-credentials" {
   ])
 }
 
+/*
 resource "aws_secretsmanager_secret_version" "db-credentials" {
   secret_id = aws_secretsmanager_secret.db-credentials.id
   secret_string = jsonencode(
@@ -150,6 +199,33 @@ resource "aws_secretsmanager_secret_version" "db-credentials" {
         aws_db_instance.database.address,
         aws_db_instance.database.port,
         aws_db_instance.database.username,
+        random_password.database.result
+      ]
+    )
+  )
+}
+*/
+
+resource "aws_secretsmanager_secret_version" "db-credentials" {
+  secret_id = aws_secretsmanager_secret.db-credentials.id
+  secret_string = jsonencode(
+    zipmap(
+      [
+        "dbinstanceidentifier",
+        "dbname",
+        "engine",
+        "host",
+        "port",
+        "username",
+        "password"
+      ],
+      [
+        aws_rds_cluster.database.id,
+        aws_rds_cluster.database.database_name,
+        aws_rds_cluster.database.engine,
+        aws_rds_cluster.database.endpoint,
+        aws_rds_cluster.database.port,
+        aws_rds_cluster.database.master_username,
         random_password.database.result
       ]
     )
