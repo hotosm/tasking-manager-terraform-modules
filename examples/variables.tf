@@ -71,3 +71,9 @@ variable "rds_opts" {
     multi_az       = false
   }
 }
+
+variable "access_token" {
+  description = "Personal access token to access Github repositories"
+  type        = string
+  sensitive   = true
+}
