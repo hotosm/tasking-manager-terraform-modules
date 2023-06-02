@@ -167,13 +167,6 @@ resource "aws_ecs_task_definition" "tasking-manager-backend" {
       name  = "backend"
       image = join(":", [lookup(var.container_image, "uri"), lookup(var.container_image, "tag")])
 
-      //    environmentFiles = [
-      //      {
-      //        type  = "s3"
-      //        value = "s3-object-arn"
-      //      }
-      //    ]
-
       environment = [
         {
           name  = "deployment_environment"
@@ -336,6 +329,10 @@ resource "aws_security_group" "public-web-access" {
     cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
   }
+
+  tags = {
+    Name = "Web access all"
+  }
 }
 
 resource "aws_security_group" "backend-to-loadbalancer" {
@@ -358,6 +355,10 @@ resource "aws_security_group" "backend-to-loadbalancer" {
     protocol         = "-1"
     cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "Access Backend containers"
   }
 }
 
