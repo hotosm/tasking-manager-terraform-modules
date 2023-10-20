@@ -71,8 +71,13 @@ data "aws_secretsmanager_secret" "oauth2_app_connect" {
 }
 
 resource "aws_iam_role" "ecs-execution" {
-  name_prefix = join("-", [var.project_name, var.deployment_environment, "backend-task"])
-  path        = join("", ["/", "tasking-manager", "/", var.deployment_environment, "/"])
+  name_prefix = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment,
+    "backend-task"
+    ]
+  )
+  path = join("", ["/", "tasking-manager", "/", var.deployment_environment, "/"])
 
   assume_role_policy = data.aws_iam_policy_document.tasks-sts.json
 
@@ -88,8 +93,13 @@ resource "aws_iam_role" "ecs-execution" {
 }
 
 resource "aws_iam_role" "ecs-task" {
-  name_prefix = join("-", [var.project_name, var.deployment_environment, "backend-exec"])
-  path        = join("", ["/", "tasking-manager", "/", var.deployment_environment, "/"])
+  name_prefix = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment,
+    "backend-exec"
+    ]
+  )
+  path = join("", ["/", "tasking-manager", "/", var.deployment_environment, "/"])
 
   assume_role_policy = data.aws_iam_policy_document.tasks-sts.json
 
@@ -100,12 +110,20 @@ resource "aws_iam_role" "ecs-task" {
 }
 
 resource "aws_cloudwatch_log_group" "tasking-manager" {
-  name              = join("-", [var.project_name, var.deployment_environment])
+  name = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment
+    ]
+  )
   retention_in_days = lookup(var.log_config, "retention_days")
 }
 
 resource "aws_ecs_cluster" "tasking-manager" {
-  name = join("-", [var.project_name, var.deployment_environment])
+  name = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment
+    ]
+  )
 
   setting {
     name  = "containerInsights"
@@ -126,7 +144,11 @@ resource "aws_ecs_cluster_capacity_providers" "tasking-manager" {
 }
 
 resource "aws_ecs_task_definition" "tasking-manager-backend" {
-  family = join("-", [var.project_name, var.deployment_environment])
+  family = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment
+    ]
+  )
 
   requires_compatibilities = ["FARGATE"]
   cpu                      = lookup(var.container_capacity, "cpu")
@@ -142,20 +164,22 @@ resource "aws_ecs_task_definition" "tasking-manager-backend" {
   }
 
   // TODO: Add volume configuration
-  //  volume {
-  //    docker_volume_configuration {
-  //      scope = "task"
-  //      labels = {
-  //        a = "b"
-  //        c = "d"
-  //      }
-  //    }
-  //
-  //    efs_volume_configuration {
-  //      file_system_id = "aws_efs_filesystem.name.id"
-  //      root_directory = "/foo"
-  //    }
-  //  }
+  /*
+    volume {
+      docker_volume_configuration {
+        scope = "task"
+        labels = {
+          a = "b"
+          c = "d"
+        }
+      }
+
+      efs_volume_configuration {
+        file_system_id = "aws_efs_filesystem.name.id"
+        root_directory = "/foo"
+      }
+    }
+  */
 
   runtime_platform {
     operating_system_family = "LINUX"
@@ -277,8 +301,12 @@ resource "aws_cloudwatch_metric_alarm" "mem" {
 resource "aws_security_group" "public-web-access" {
   description = "Security group to attach to the load balancers"
 
-  name_prefix = join("-", [var.project_name, var.deployment_environment])
-  vpc_id      = var.vpc_id
+  name_prefix = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment
+    ]
+  )
+  vpc_id = var.vpc_id
 
   ingress {
     description      = "Allow from security groups"
@@ -314,8 +342,12 @@ resource "aws_security_group" "public-web-access" {
 resource "aws_security_group" "backend-to-loadbalancer" {
   description = "Security group to attach to the backend containers"
 
-  name_prefix = join("-", [var.project_name, var.deployment_environment])
-  vpc_id      = var.vpc_id
+  name_prefix = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment
+    ]
+  )
+  vpc_id = var.vpc_id
 
   ingress {
     description = "Allow from security groups"
@@ -339,7 +371,11 @@ resource "aws_security_group" "backend-to-loadbalancer" {
 }
 
 resource "aws_ecs_service" "backend" {
-  name    = join("-", [var.project_name, var.deployment_environment])
+  name = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment
+    ]
+  )
   cluster = aws_ecs_cluster.tasking-manager.arn
 
   load_balancer {
@@ -400,7 +436,11 @@ resource "aws_ecs_service" "backend" {
 }
 
 resource "aws_lb" "backend" {
-  name               = join("-", [var.project_name, var.deployment_environment])
+  name = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment
+    ]
+  )
   internal           = false
   ip_address_type    = "dualstack"
   load_balancer_type = "application"
@@ -414,7 +454,11 @@ resource "aws_lb" "backend" {
 }
 
 resource "aws_lb_target_group" "backend" {
-  name        = join("-", [var.project_name, var.deployment_environment])
+  name = join("-", [
+    lookup(var.project_meta, "short_name"),
+    var.deployment_environment
+    ]
+  )
   target_type = "ip"
   port        = var.container_port
   protocol    = "HTTP"

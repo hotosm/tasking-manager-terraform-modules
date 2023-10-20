@@ -1,7 +1,12 @@
-variable "project_name" {
-  description = "Name of the project"
-  type        = string
-  default     = "tasking-manager"
+variable "project_meta" {
+  description = "Project metadata"
+  type        = map(string)
+
+  default = {
+    name       = "tasking-manager"
+    short_name = "tasking-manager"
+    version    = ""
+  }
 }
 
 variable "deployment_environment" {
@@ -193,7 +198,7 @@ variable "branding" {
   default = {
     org_name                  = "Humanitarian OpenStreetMap Team"
     org_code                  = "HOT"
-    org_logo_url              = ""
+    org_logo_url              = "https://cdn.hotosm.org/tasking-manager/uploads/1588741335578_hot-logo.png"
     contact_email             = "noreply@bar.com"
     default_changeset_comment = "#hot-project"
   }
