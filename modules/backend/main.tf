@@ -181,32 +181,8 @@ resource "aws_ecs_task_definition" "tasking-manager-backend" {
           value = var.deployment_environment
         },
         {
-          name  = "TM_DEFAULT_CHANGESET_COMMENT"
-          value = lookup(var.branding, "default_changeset_comment")
-        },
-        {
-          name  = "TM_EMAIL_FROM_ADDRESS"
-          value = var.smtp_from_address
-        },
-        {
-          name  = "TM_EMAIL_CONTACT_ADDRESS"
-          value = lookup(var.branding, "contact_email")
-        },
-        {
           name  = "TM_LOG_LEVEL"
           value = lookup(var.log_config, "log_level")
-        },
-        {
-          name  = "TM_ORG_NAME"
-          value = lookup(var.branding, "org_name")
-        },
-        {
-          name  = "TM_ORG_CODE"
-          value = lookup(var.branding, "org_code")
-        },
-        {
-          name  = "TM_ORG_LOGO"
-          value = lookup(var.branding, "org_logo_url")
         },
         {
           name  = "NEW_RELIC_ENVIRONMENT"
