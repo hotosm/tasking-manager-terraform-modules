@@ -163,24 +163,6 @@ resource "aws_ecs_task_definition" "tasking-manager-backend" {
     size_in_gib = var.ephemeral_storage_gb
   }
 
-  // TODO: Add volume configuration
-  /*
-    volume {
-      docker_volume_configuration {
-        scope = "task"
-        labels = {
-          a = "b"
-          c = "d"
-        }
-      }
-
-      efs_volume_configuration {
-        file_system_id = "aws_efs_filesystem.name.id"
-        root_directory = "/foo"
-      }
-    }
-  */
-
   runtime_platform {
     operating_system_family = "LINUX"
     cpu_architecture        = var.container_runtime_architecture
@@ -188,8 +170,9 @@ resource "aws_ecs_task_definition" "tasking-manager-backend" {
 
   container_definitions = jsonencode([
     {
-      name  = "backend"
-      image = join(":", [lookup(var.container_image, "uri"), lookup(var.container_image, "tag")])
+      name      = "backend"
+      essential = true
+      image     = join(":", [lookup(var.container_image, "uri"), lookup(var.container_image, "tag")])
 
       environment = [
         {
@@ -214,8 +197,6 @@ resource "aws_ecs_task_definition" "tasking-manager-backend" {
         }
       ]
 
-      essential = true
-
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -236,7 +217,7 @@ resource "aws_ecs_task_definition" "tasking-manager-backend" {
 
       secrets = [
         {
-          name      = "TM_DB_CONNECT_PARAM_JSON"
+          name      = "DB_CONNECT_PARAM_JSON"
           valueFrom = var.secrets_store_db_credential_arn
         },
         {
@@ -267,7 +248,6 @@ resource "aws_ecs_task_definition" "tasking-manager-backend" {
 
       startTimeout = 15
       stopTimeout  = 15
-
     }
   ])
 }
@@ -373,6 +353,7 @@ resource "aws_security_group" "backend-to-loadbalancer" {
 resource "aws_ecs_service" "backend" {
   name = join("-", [
     lookup(var.project_meta, "short_name"),
+    "backend",
     var.deployment_environment
     ]
   )
@@ -414,9 +395,9 @@ resource "aws_ecs_service" "backend" {
     type = "ECS"
   }
 
-  deployment_maximum_percent         = 100
+  deployment_maximum_percent         = 400
   deployment_minimum_healthy_percent = 50
-  desired_count                      = 1
+  desired_count                      = 2
   enable_ecs_managed_tags            = true
   force_new_deployment               = true
   health_check_grace_period_seconds  = 10
@@ -427,6 +408,7 @@ resource "aws_ecs_service" "backend" {
       aws_security_group.backend-to-loadbalancer.id,
       var.database_security_group
     ]
+    assign_public_ip = false
   }
 
   propagate_tags        = "SERVICE" // OR TASK_DEFINITION
@@ -459,10 +441,11 @@ resource "aws_lb_target_group" "backend" {
     var.deployment_environment
     ]
   )
-  target_type = "ip"
-  port        = var.container_port
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
+  target_type     = "ip"
+  ip_address_type = "ipv4" // Or ipv6
+  port            = var.container_port
+  protocol        = "HTTP"
+  vpc_id          = var.vpc_id
 
   health_check {
     enabled  = true
